@@ -211,6 +211,49 @@ def grouped_bars(categories: list[str], series: list[dict], *, width=720, height
     return "".join(parts)
 
 
+def primer() -> str:
+    """Who the competitors are, before any number is quoted at the reader."""
+    fly = [
+        ("Wired (no learning)", "The connectome as mapped, with learning switched off. What the fly does is whatever "
+                  "the wiring does: senses drive motor pools, the busiest pool picks the move, nothing changes."),
+        ("In-match learning", "The same brain, with a dopamine-like rule switched on for one match. Landing "
+                              "a hit strengthens whatever just fired; taking one weakens it. It starts over every match."),
+        ("In-match learning + baseline", "The same, except each move is judged against its own recent average instead of "
+                        "against zero. Without this a losing fly suppresses everything it tries, including the moves that work."),
+        ("Curriculum", "A run of eight matches where each one starts from the best brain saved so far, so "
+                       "what one match learns is still there in the next."),
+        ("Curriculum + thresholds", "A curriculum that also learns how certain a motor pool must be before it is "
+                          "allowed to act — patience as something learned rather than set by us."),
+        ("Reloaded brain", "A brain that finished a curriculum against one opponent, entered cold against a "
+                           "different one. It learns nothing new on the way in; it simply arrives trained."),
+        ("Rewired control", "The null model. Same neurons, same number of connections into and out of each "
+                            "one, same transmitter signs, same synapse weights — only which neuron connects to which is shuffled."),
+    ]
+    opp = [
+        ("Rule bot", "Five lines of hand-written positional rules: close the distance, strike when in range, "
+                     "otherwise block. No model, no learning."),
+        ("Jev API", "TypeSafe's System One model, reading the fight as JSON and returning one typed move with "
+                    "probabilities, about five times a second."),
+        ("Local policy", "168 weights fitted to Jev's own probabilities — the same judgment, answered in "
+                         "microseconds instead of a network round trip."),
+        ("Hybrid", "The local policy moving at the fly's speed while Jev corrects it live, and each correction "
+                   "trains the policy further."),
+    ]
+    col = lambda title, items, note: (
+        f'<div><h4>{html.escape(title)}</h4><p class="colnote">{html.escape(note)}</p><dl>' +
+        "".join(f'<dt>{html.escape(n)}</dt><dd>{html.escape(d)}</dd>' for n, d in items) + "</dl></div>")
+    return (
+        '<section class="primer-wrap"><h3>The competitors</h3>'
+        '<p class="note">A match is always one fly against one opponent, and neither side is a single thing. '
+        'On the fly\'s side what changes is how much the brain is allowed to change, and whether the wiring is '
+        'the real one. On the other side what changes is where the decisions come from. Everything below is a '
+        'record of one of these against one of those.</p>'
+        '<div class="primer">'
+        + col("The fly brains", fly, "all of them the same 12,000 neurons of maleCNS, differing only in how they learn")
+        + col("The opponents", opp, "all of them answering on the same state, differing in what does the answering")
+        + '</div></section>')
+
+
 def standings_table(cells: dict) -> str:
     """One row per competitor, each record read from that competitor's own side."""
     rows = []
@@ -230,7 +273,8 @@ def standings_table(cells: dict) -> str:
             entries.append({"name": OPPONENTS[key][0] if flip else key, "key": key, "side": side,
                             "w": w, "d": d, "l": l, "played": played, "matches": sum(c["matches"] for _, c in mine),
                             "rate": w / max(1, played), "dps": mean(dps) if dps else 0,
-                            "faced": [OPPONENTS[o][0] if side == "fly" else o for o in faced]})
+                            "faced": [OPPONENTS[o][0] if side == "fly" else o for o in faced],
+                            "field": len(OPPONENTS) if side == "fly" else len(FLY_ORDER)})
         rows += sorted(entries, key=lambda e: -e["rate"])
 
     out = ['<table class="standings"><thead><tr><th>Competitor</th><th>Rounds</th><th>W</th><th>D</th>'
@@ -242,8 +286,8 @@ def standings_table(cells: dict) -> str:
             for v, c in ((r["w"], "var(--pole-cool)"), (r["d"], "var(--neutral)"), (r["l"], "var(--pole-warm)")))
         out.append(
             f'<tr class="side-{r["side"]}"><td><b>{html.escape(r["name"])}</b> <span class="tag">{side_label[r["side"]]}</span>'
-            f'<span class="desc">{html.escape(SIDE_NOTE.get(r["key"], ""))}</span>'
-            f'<span class="sched">played {html.escape(", ".join(r["faced"]))}</span></td>'
+            + (f'<span class="sched">played only {html.escape(", ".join(r["faced"]))}</span>'
+               if len(r["faced"]) < r["field"] else "") + '</td>'
             f'<td>{r["played"]}</td><td>{r["w"]}</td><td>{r["d"]}</td><td>{r["l"]}</td>'
             f'<td>{r["rate"]:.0%}</td><td>{r["dps"]:.2f}</td>'
             f'<td class="recordcol"><span class="recordbar" title="{r["w"]} won, {r["d"]} drawn, {r["l"]} lost '
@@ -279,12 +323,12 @@ def head_to_head(cells: dict, *, width=720, cell_h=54) -> str:
             parts.append(
                 f'<rect x="{x + gap:.1f}" y="{y + gap}" width="{cw - gap * 2:.1f}" height="{cell_h - gap * 2}" rx="4" '
                 f'style="fill:{fill};fill-opacity:{0.14 + 0.5 * abs(margin):.2f}">'
-                f'<title>{html.escape(f)} vs {html.escape(OPPONENTS[j][0])}: {c["w"]} won, {c["d"]} drawn, '
-                f'{c["l"]} lost over {c["matches"]} matches</title></rect>'
-                f'<text class="cell-record" x="{x + cw / 2:.1f}" y="{y + cell_h / 2:.0f}" text-anchor="middle">'
-                f'{c["w"]}–{c["d"]}–{c["l"]}</text>'
+                f'<title>{html.escape(f)} vs {html.escape(OPPONENTS[j][0])}: won {c["w"] / n:.0%} of {n} rounds — '
+                f'{c["w"]} won, {c["d"]} drawn, {c["l"]} lost</title></rect>'
+                f'<text class="cell-rate" x="{x + cw / 2:.1f}" y="{y + cell_h / 2 - 1:.0f}" text-anchor="middle">'
+                f'{c["w"] / n:.0%}</text>'
                 f'<text class="cell-sub" x="{x + cw / 2:.1f}" y="{y + cell_h / 2 + 15:.0f}" text-anchor="middle">'
-                f'{c["matches"]} match{"es" if c["matches"] != 1 else ""}</text>')
+                f'{c["w"]}–{c["d"]}–{c["l"]}</text>')
     parts.append("</svg>")
     return "".join(parts)
 
@@ -383,23 +427,26 @@ def build(matches: list[dict]) -> str:
     stat = lambda v, l, s="": f'<div class="stat"><b>{v}</b><span>{l}</span><i>{s}</i></div>'
     cells = records(matches)
     figures = [
+        primer(),
         figure("Standings",
-               "Not one fly and one Jev: each side fields several competitors, separated by what "
-               "changes about them — for the fly, its learning setup and its wiring; for the other side, where "
-               "the decisions come from. Rounds, from each competitor's own point of view. Nobody played a full "
-               "schedule, so read this alongside the grid below: a good record against the rule bot is not the "
-               "same achievement as a good record against the hybrid.",
+               "Rounds, counted from each competitor's own point of view. Every fly has now met every "
+               "opponent, so the win rates are comparable — but the rounds behind them are not evenly spread, "
+               "and a fly that spent most of its rounds against the rule bot is not the same as one that spent "
+               "them against the hybrid. The grid below is where that shows.",
                standings_table(cells),
                legend([("Won", "var(--pole-cool)"), ("Drawn", "var(--neutral)"), ("Lost", "var(--pole-warm)")]), ""),
         figure("Who actually played whom",
-               "Every competitor against every other, as rounds won–drawn–lost by the fly. Read down a column "
+               "Every competitor against every other. The big number is the share of rounds the fly won; "
+               "under it, the record as rounds won–drawn–lost. Read down a column "
                "to see what the fly's learning setup is worth against a fixed opponent; read across a row to see "
-               "how far that setup carries. The wiring alone loses to the whole field; a brain carried in from an "
+               "how far that setup carries. The tint is rounds won minus rounds lost, so a cell full of draws sits "
+               "near level even when its win rate reads zero. The wiring alone loses to the whole field; a brain carried in from an "
                "earlier curriculum is the only fly with a winning record against all four.",
                head_to_head(cells),
-               legend([("Fly ahead", "var(--pole-cool)"), ("Level", "var(--neutral)"), ("Fly behind", "var(--pole-warm)")]),
-               table(["Fly brain", "Opponent", "Matches", "Won", "Drawn", "Lost"],
-                     [[f, OPPONENTS[j][0], c["matches"], c["w"], c["d"], c["l"]]
+               legend([("Fly ahead on rounds", "var(--pole-cool)"), ("Level", "var(--neutral)"),
+                       ("Fly behind", "var(--pole-warm)")]),
+               table(["Fly brain", "Opponent", "Win rate", "Won", "Drawn", "Lost"],
+                     [[f, OPPONENTS[j][0], f'{c["w"] / max(1, c["w"] + c["d"] + c["l"]):.0%}', c["w"], c["d"], c["l"]]
                       for (f, j), c in sorted(cells.items(), key=lambda kv: (FLY_ORDER.index(kv[0][0]), kv[0][1]))],
                      "every match-up")),
     ]
@@ -494,6 +541,14 @@ PAGE = """<!doctype html>
   .stat span {{ display: block; font-size: .82rem; color: var(--text-secondary); }}
   .stat i {{ display: block; font-size: .72rem; color: var(--text-muted); font-style: normal; }}
   figure {{ margin: 0 0 44px; }}
+  .primer-wrap {{ margin: 0 0 44px; }}
+  .primer {{ display: grid; grid-template-columns: 1fr 1fr; gap: 12px 34px; }}
+  .primer h4 {{ font-size: .95rem; margin: 0 0 2px; }}
+  .primer .colnote {{ color: var(--text-muted); font-size: .78rem; margin: 0 0 12px; }}
+  .primer dl {{ margin: 0; }}
+  .primer dt {{ font-weight: 600; font-size: .88rem; margin-top: 12px; }}
+  .primer dd {{ margin: 2px 0 0; color: var(--text-secondary); font-size: .85rem; }}
+  @media (max-width: 620px) {{ .primer {{ grid-template-columns: 1fr; gap: 26px; }} }}
   h3 {{ font-size: 1.12rem; margin: 0 0 4px; }}
   .note {{ color: var(--text-secondary); font-size: .92rem; margin: 0 0 14px; max-width: 68ch; }}
   .legend {{ display: flex; flex-wrap: wrap; gap: 14px; margin-bottom: 6px; font-size: .84rem; color: var(--text-secondary); }}
@@ -509,8 +564,8 @@ PAGE = """<!doctype html>
   .row-label {{ fill: var(--text-primary); }}
   .in-bar {{ fill: #fff; font-size: 11px; font-variant-numeric: tabular-nums; }}
   .seg {{ stroke: var(--surface-1); stroke-width: 2; }}
-  .cell-record {{ fill: var(--text-primary); font-size: 13px; font-variant-numeric: tabular-nums; }}
-  .cell-sub {{ fill: var(--text-muted); font-size: 10.5px; }}
+  .cell-rate {{ fill: var(--text-primary); font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; }}
+  .cell-sub {{ fill: var(--text-muted); font-size: 11px; font-variant-numeric: tabular-nums; }}
   .cell-empty {{ fill: var(--surface-2); }}
   .standings {{ font-size: .9rem; }}
   .standings th {{ color: var(--text-muted); font-weight: 500; font-size: .78rem; }}
