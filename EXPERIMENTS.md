@@ -250,10 +250,53 @@ every pool in proportion to its population; the real circuit routes selectively.
 
 ---
 
+## 13. The round robin: every competitor against every other
+
+Until now each fly had only ever been entered against the opponent that had just beaten its
+predecessor, so the match-up grid was a staircase with fourteen holes in it. Filling them took 56
+more matches, played headlessly by `scripts/run_matches.py` — the real page in headless Chromium,
+one arm at a time, with the saved brains parked between arms so each curriculum starts from the
+connectome instead of inheriting whatever was best in the archive.
+
+Rounds won–drawn–lost by the fly, 140 matches, 433 rounds:
+
+| | Rule bot | Jev API | Local policy | Hybrid |
+|---|---|---|---|---|
+| Wired (no learning) | 6–0–7 | 2–0–14 | 0–0–16 | 0–0–20 |
+| In-match learning | 0–0–4 | 4–0–2 | 2–0–2 | 0–0–4 |
+| In-match learning + baseline | 2–0–5 | 3–0–2 | 2–0–3 | 0–0–4 |
+| Curriculum | 16–0–1 | 24–0–0 | 26–6–43 | 0–7–17 |
+| Curriculum + thresholds | 23–0–1 | **4–0–16** | 18–0–0 | 0–16–8 |
+| Reloaded brain | 6–0–0 | 5–0–4 | 6–0–0 | 21–0–8 |
+| Rewired control | 23–0–1 | **0–1–10** | 0–6–5 | 2–4–1 |
+
+Three things the blank cells had been hiding.
+
+**The rewired control's 23–1 was about its schedule, not its wiring.** It had only ever played the
+rule bot. Against Jev it goes 0–1–10, against the local policy 0–6–5. Shuffled wiring beats the
+weakest opponent in the field and nothing else, and even there it wins by stalling: 2.3 damage per
+landed hit against the real circuit's 5.5. Experiment 12 read one match-up as if it were general.
+The claim that survives is narrower — *the connectome is what converts a decision into a hit that
+lands*; what it is not is a general-purpose advantage that shows up against every opponent.
+
+**Learnable thresholds are opponent-specific.** They sweep the local policy (18–0, 2–0 in all eight
+generations) and hold the rule bot at 23–1, and they collapse against Jev — 4–16, where the plain
+curriculum had gone 24–0. Raising a threshold buys patience; Jev is the one opponent that punishes
+patience, because it closes distance faster than the fly re-decides.
+
+**Transfer beats training length.** The reloaded brain — a curriculum brain carried in cold — is the
+only fly with a winning record against all four (6–0, 5–4, 6–0, 21–8). The same connectome learning
+from scratch inside a single match loses 0–4 to the rule bot the reloaded brain sweeps 6–0.
+
+Two cells are thinner than the rest: the rewired arms against Jev and the local policy got 5 and 4
+generations before hitting a wall-clock cap, not 8.
+
+---
+
 ## What would change our minds
 
-- **More replication.** Most arms are single runs. The 5–2 is twice; the rewired control once per
-  opponent.
+- **More replication.** Most arms are single runs. The 5–2 is twice; the rewired control has one
+  arm per opponent, two of them short.
 - **Symmetric information.** Give both sides the same inputs, or deny Jev the game's hit predicate,
   and the comparison becomes meaningful rather than illustrative.
 - **A learned readout.** Ours is a ~12-parameter controller (per-pool gains and thresholds) sitting

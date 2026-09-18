@@ -17,7 +17,7 @@ answers with one typed choice among the same seven moves, about five times a sec
 The game is [mk.js](https://github.com/mgechev/mk.js). Nothing in the fly is trained in advance;
 what learning there is happens during the fight, through a dopamine-like rule.
 
-**[EXPERIMENTS.md](EXPERIMENTS.md) is the interesting part** — twelve experiments in the order they
+**[EXPERIMENTS.md](EXPERIMENTS.md) is the interesting part** — thirteen experiments in the order they
 were run, failures and wrong predictions included. The standings and charts behind them,
 generated from 84 archived matches, are at
 **[lavallee.github.io/mk-jev-fly-brain](https://lavallee.github.io/mk-jev-fly-brain/)** — there is
@@ -84,10 +84,14 @@ Rounds run in real time either way, so an eight-generation curriculum is about t
 - **Order of opponents decides the outcome.** Meeting the strongest opponent cold, the fly learns
   not to fight (0–23, zero damage). Arriving with a brain evolved against the rule bot, it wins 5–2,
   twice.
-- **The connectome supplies timing, not competence.** A rewired control — same neurons, degrees,
-  signs and weights, connections shuffled — still learns to beat the rule bot 23–1. It just cannot
-  hit: it swings more, connects more, and does half the damage, because its hits land on a raised
-  guard. Real wiring lands 5.6 damage per hit, shuffled wiring 2.3.
+- **The connectome is what makes a hit land.** A rewired control — same neurons, degrees, signs and
+  weights, connections shuffled — still learns to beat the rule bot 23–1, but it cannot hit: it
+  swings more, connects more, and does half the damage, because its hits arrive on a raised guard.
+  Real wiring lands 5.5 damage per hit, shuffled wiring 2.3. Played against the rest of the field it
+  has no advantage left at all: 0–1–10 against Jev, 0–6–5 against the local policy.
+- **Who you played decides what your record means.** Every competitor has now met every other —
+  seven fly variants, four opponents, 140 matches. The fly with a winning record against all four is
+  the one that arrived already trained, not the one that trained longest.
 
 Two caveats worth carrying with any of it: Jev is handed the game's own hit predicate
 (`in_attack_range`), plus both life totals and the clock, while the fly gets modelled sensory drives
