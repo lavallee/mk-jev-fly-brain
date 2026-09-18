@@ -18,8 +18,11 @@ The game is [mk.js](https://github.com/mgechev/mk.js). Nothing in the fly is tra
 what learning there is happens during the fight, through a dopamine-like rule.
 
 **[EXPERIMENTS.md](EXPERIMENTS.md) is the interesting part** — twelve experiments in the order they
-were run, failures and wrong predictions included. The charts behind them, generated from 84
-archived matches, are at **[lavallee.github.io/mk-jev-fly-brain](https://lavallee.github.io/mk-jev-fly-brain/)**.
+were run, failures and wrong predictions included. The standings and charts behind them,
+generated from 84 archived matches, are at
+**[lavallee.github.io/mk-jev-fly-brain](https://lavallee.github.io/mk-jev-fly-brain/)** — there is
+no single fly and no single Jev, so each learning setup and each source of decisions is entered as
+its own competitor.
 
 ## Quick start
 

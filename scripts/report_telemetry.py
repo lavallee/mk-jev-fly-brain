@@ -33,6 +33,53 @@ OPPONENTS = {  # internal name -> (label, categorical slot)
 POOLS = {"wing": ("Wings (guard)", 1), "jump": ("TTMn (escape jump)", 2), "kick": ("Hind legs (kick)", 3)}
 ACTIONS = ["stand", "walk_forward", "walk_backward", "jump_away", "punch", "kick", "block"]
 
+# There is no one fly and no one Jev. Each side fields several competitors, and a match is only
+# ever fly-vs-Jev, so the league is bipartite: the two columns of the standings never play
+# each other, and each row's record is against whichever opponents it happened to be entered against.
+SIDE_NOTE = {
+    "rules": "five lines of hand-written positional rules",
+    "api": "TypeSafe System One, reading the fight as JSON ~5 times a second",
+    "local": "168 weights distilled from Jev's probabilities, microseconds per decision",
+    "hybrid": "the local policy moving at fly speed, Jev correcting and teaching it live",
+    "Wired (no learning)": "the connectome as mapped, plasticity off",
+    "In-match learning": "dopamine learning inside a single match, starting from the wired brain",
+    "In-match learning + baseline": "the same, comparing each move against its own recent average",
+    "Curriculum": "each match inherits the best brain saved so far",
+    "Curriculum + thresholds": "a curriculum, plus thresholds the fly can learn to raise and lower",
+    "Reloaded brain": "a curriculum-trained brain, entered against a harder opponent",
+    "Rewired control": "connections shuffled; neurons, degrees, signs and weights kept",
+}
+FLY_ORDER = ["Wired (no learning)", "In-match learning", "In-match learning + baseline",
+             "Curriculum", "Curriculum + thresholds", "Reloaded brain", "Rewired control"]
+
+
+def fly_variant(cfg: dict) -> str:
+    """Which fly this is. The line between variants is where the learning setup differs."""
+    if cfg.get("circuit") == "rewired":
+        return "Rewired control"
+    if not cfg.get("learn"):
+        return "Wired (no learning)"
+    if cfg.get("lineage") or cfg.get("generation"):
+        return "Curriculum + thresholds" if cfg.get("thresh_lr") else "Curriculum"
+    if cfg.get("brain_start") not in (None, "wired"):
+        return "Reloaded brain"
+    return "In-match learning" + (" + baseline" if cfg.get("baseline") else "")
+
+
+def records(matches: list[dict]) -> dict:
+    """Round records per (fly variant, Jev variant), plus each competitor's damage per second."""
+    cells: dict[tuple[str, str], dict] = defaultdict(
+        lambda: {"matches": 0, "w": 0, "d": 0, "l": 0, "fly_dps": [], "jev_dps": []})
+    for m in matches:
+        cfg = m.get("config") or {}
+        cell = cells[(fly_variant(cfg), cfg.get("jev_mode") or "api")]
+        cell["matches"] += 1
+        for r in m["rounds"]:
+            cell["w" if r["winner"] == "fly" else "d" if r["winner"] == "draw" else "l"] += 1
+            cell["fly_dps"].append(r["damage"]["fly"] / max(0.1, r["seconds"]))
+            cell["jev_dps"].append(r["damage"]["jev"] / max(0.1, r["seconds"]))
+    return cells
+
 
 # ---------- data ----------
 
@@ -160,6 +207,84 @@ def grouped_bars(categories: list[str], series: list[dict], *, width=720, height
     return "".join(parts)
 
 
+def standings_table(cells: dict) -> str:
+    """One row per competitor, each record read from that competitor's own side."""
+    rows = []
+    for side, keys, flip in (("fly", FLY_ORDER, False), ("jev", list(OPPONENTS), True)):
+        entries = []
+        for key in keys:
+            mine = [(k, c) for k, c in cells.items() if k[0 if side == "fly" else 1] == key]
+            if not mine:
+                continue
+            w = sum(c["l" if flip else "w"] for _, c in mine)
+            d = sum(c["d"] for _, c in mine)
+            l = sum(c["w" if flip else "l"] for _, c in mine)
+            dps = [v for _, c in mine for v in c["jev_dps" if flip else "fly_dps"]]
+            played = w + d + l
+            faced = sorted({k[1] if side == "fly" else k[0] for k, _ in mine},
+                            key=lambda o: list(OPPONENTS).index(o) if side == "fly" else FLY_ORDER.index(o))
+            entries.append({"name": OPPONENTS[key][0] if flip else key, "key": key, "side": side,
+                            "w": w, "d": d, "l": l, "played": played, "matches": sum(c["matches"] for _, c in mine),
+                            "rate": w / max(1, played), "dps": mean(dps) if dps else 0,
+                            "faced": [OPPONENTS[o][0] if side == "fly" else o for o in faced]})
+        rows += sorted(entries, key=lambda e: -e["rate"])
+
+    out = ['<table class="standings"><thead><tr><th>Competitor</th><th>Rounds</th><th>W</th><th>D</th>'
+           '<th>L</th><th>Win rate</th><th>Damage&nbsp;/&nbsp;s</th><th class="recordcol">Record</th></tr></thead><tbody>']
+    side_label = {"fly": "fly brain", "jev": "opponent"}
+    for r in rows:
+        bar = "".join(
+            f'<i style="width:{100 * v / max(1, r["played"]):.1f}%;background:{c}"></i>'
+            for v, c in ((r["w"], "var(--pole-cool)"), (r["d"], "var(--neutral)"), (r["l"], "var(--pole-warm)")))
+        out.append(
+            f'<tr class="side-{r["side"]}"><td><b>{html.escape(r["name"])}</b> <span class="tag">{side_label[r["side"]]}</span>'
+            f'<span class="desc">{html.escape(SIDE_NOTE.get(r["key"], ""))}</span>'
+            f'<span class="sched">played {html.escape(", ".join(r["faced"]))}</span></td>'
+            f'<td>{r["played"]}</td><td>{r["w"]}</td><td>{r["d"]}</td><td>{r["l"]}</td>'
+            f'<td>{r["rate"]:.0%}</td><td>{r["dps"]:.2f}</td>'
+            f'<td class="recordcol"><span class="recordbar" title="{r["w"]} won, {r["d"]} drawn, {r["l"]} lost '
+            f'across {r["matches"]} matches">{bar}</span></td></tr>')
+    out.append("</tbody></table>")
+    return "".join(out)
+
+
+def head_to_head(cells: dict, *, width=720, cell_h=54) -> str:
+    """Fly variants down, opponents across. Tint carries the margin; the record is written in."""
+    flies = [f for f in FLY_ORDER if any(k[0] == f for k in cells)]
+    jevs = [j for j in OPPONENTS if any(k[1] == j for k in cells)]
+    pad_l, pad_t, gap = 186, 30, 3
+    cw = (width - pad_l) / max(1, len(jevs))
+    height = pad_t + len(flies) * cell_h
+    parts = [f'<svg viewBox="0 0 {width} {height}" role="img" class="chart">']
+    for ci, j in enumerate(jevs):
+        parts.append(f'<text class="tick" x="{pad_l + cw * (ci + 0.5):.1f}" y="{pad_t - 12}" text-anchor="middle">'
+                     f'{html.escape(OPPONENTS[j][0])}</text>')
+    for ri, f in enumerate(flies):
+        y = pad_t + ri * cell_h
+        parts.append(f'<text class="row-label" x="{pad_l - 14}" y="{y + cell_h / 2 + 4:.0f}" text-anchor="end">{html.escape(f)}</text>')
+        for ci, j in enumerate(jevs):
+            x = pad_l + cw * ci
+            c = cells.get((f, j))
+            if not c:
+                parts.append(f'<rect class="cell-empty" x="{x + gap:.1f}" y="{y + gap}" width="{cw - gap * 2:.1f}" '
+                             f'height="{cell_h - gap * 2}" rx="4"/>')
+                continue
+            n = c["w"] + c["d"] + c["l"] or 1
+            margin = (c["w"] - c["l"]) / n
+            fill = "var(--neutral)" if abs(margin) < 0.1 else ("var(--pole-cool)" if margin > 0 else "var(--pole-warm)")
+            parts.append(
+                f'<rect x="{x + gap:.1f}" y="{y + gap}" width="{cw - gap * 2:.1f}" height="{cell_h - gap * 2}" rx="4" '
+                f'style="fill:{fill};fill-opacity:{0.14 + 0.5 * abs(margin):.2f}">'
+                f'<title>{html.escape(f)} vs {html.escape(OPPONENTS[j][0])}: {c["w"]} won, {c["d"]} drawn, '
+                f'{c["l"]} lost over {c["matches"]} matches</title></rect>'
+                f'<text class="cell-record" x="{x + cw / 2:.1f}" y="{y + cell_h / 2:.0f}" text-anchor="middle">'
+                f'{c["w"]}–{c["d"]}–{c["l"]}</text>'
+                f'<text class="cell-sub" x="{x + cw / 2:.1f}" y="{y + cell_h / 2 + 15:.0f}" text-anchor="middle">'
+                f'{c["matches"]} match{"es" if c["matches"] != 1 else ""}</text>')
+    parts.append("</svg>")
+    return "".join(parts)
+
+
 def legend(items: list[tuple[str, str]]) -> str:
     dots = "".join(f'<span class="key"><i style="background:{var}"></i>{html.escape(name)}</span>' for name, var in items)
     return f'<div class="legend">{dots}</div>'
@@ -250,7 +375,28 @@ def build(matches: list[dict]) -> str:
                            {"name": "Fly brain", "slot": 1, "values": mix(fly_actions)}) if sum(s["values"]) > 0]
 
     stat = lambda v, l, s="": f'<div class="stat"><b>{v}</b><span>{l}</span><i>{s}</i></div>'
-    figures = []
+    cells = records(matches)
+    figures = [
+        figure("Standings",
+               "Not one fly and one Jev: each side fields several competitors, separated by what "
+               "changes about them — for the fly, its learning setup and its wiring; for the other side, where "
+               "the decisions come from. Rounds, from each competitor's own point of view. Nobody played a full "
+               "schedule, so read this alongside the grid below: a good record against the rule bot is not the "
+               "same achievement as a good record against the hybrid.",
+               standings_table(cells),
+               legend([("Won", "var(--pole-cool)"), ("Drawn", "var(--neutral)"), ("Lost", "var(--pole-warm)")]), ""),
+        figure("Who actually played whom",
+               "Every match-up in the telemetry, as rounds won–drawn–lost by the fly. Blank cells were never "
+               "played: each fly was built to answer whichever opponent had just beaten its predecessor, so the "
+               "grid fills as a staircase rather than a round robin. The wired brain is the only one that faced "
+               "the whole field, and it lost to all of it.",
+               head_to_head(cells),
+               legend([("Fly ahead", "var(--pole-cool)"), ("Level", "var(--neutral)"), ("Fly behind", "var(--pole-warm)")]),
+               table(["Fly brain", "Opponent", "Matches", "Won", "Drawn", "Lost"],
+                     [[f, OPPONENTS[j][0], c["matches"], c["w"], c["d"], c["l"]]
+                      for (f, j), c in sorted(cells.items(), key=lambda kv: (FLY_ORDER.index(kv[0][0]), kv[0][1]))],
+                     "every match-up")),
+    ]
     if series1:
         figures.append(figure(
             "The fly learns, against every opponent but one",
@@ -357,6 +503,21 @@ PAGE = """<!doctype html>
   .row-label {{ fill: var(--text-primary); }}
   .in-bar {{ fill: #fff; font-size: 11px; font-variant-numeric: tabular-nums; }}
   .seg {{ stroke: var(--surface-1); stroke-width: 2; }}
+  .cell-record {{ fill: var(--text-primary); font-size: 13px; font-variant-numeric: tabular-nums; }}
+  .cell-sub {{ fill: var(--text-muted); font-size: 10.5px; }}
+  .cell-empty {{ fill: var(--surface-2); }}
+  .standings {{ font-size: .9rem; }}
+  .standings th {{ color: var(--text-muted); font-weight: 500; font-size: .78rem; }}
+  .standings td {{ padding: 9px 8px; vertical-align: top; }}
+  .standings td:first-child {{ width: 46%; }}
+  .standings .tag {{ font-size: .68rem; color: var(--text-muted); border: 1px solid var(--line);
+    border-radius: 99px; padding: 1px 7px; margin-left: 6px; white-space: nowrap; }}
+  .standings .desc {{ display: block; color: var(--text-secondary); font-size: .8rem; margin-top: 2px; }}
+  .standings .sched {{ display: block; color: var(--text-muted); font-size: .74rem; margin-top: 3px; }}
+  .standings tr.side-jev td:first-child b {{ font-style: italic; }}
+  .recordcol {{ width: 128px; }}
+  .recordbar {{ display: flex; gap: 2px; height: 10px; margin-top: 4px; }}
+  .recordbar i {{ display: block; height: 100%; border-radius: 2px; }}
   .tableview {{ margin-top: 10px; font-size: .86rem; color: var(--text-secondary); }}
   .tableview summary {{ cursor: pointer; }}
   table {{ border-collapse: collapse; margin-top: 10px; width: 100%; }}
