@@ -18,7 +18,8 @@ The game is [mk.js](https://github.com/mgechev/mk.js). Nothing in the fly is tra
 what learning there is happens during the fight, through a dopamine-like rule.
 
 **[EXPERIMENTS.md](EXPERIMENTS.md) is the interesting part** — twelve experiments in the order they
-were run, failures and wrong predictions included.
+were run, failures and wrong predictions included. The charts behind them, generated from 84
+archived matches, are at **[lavallee.github.io/mk-jev-fly-brain](https://lavallee.github.io/mk-jev-fly-brain/)**.
 
 ## Quick start
 
@@ -52,7 +53,12 @@ for.
 ```
 
 Every match writes a JSON file to `telemetry/mk/`, including the fly's learned synapse strengths,
-and the *Starting brain* menu can begin a later match from any of them.
+and the *Starting brain* menu can begin a later match from any of them. Once you have matches of
+your own:
+
+```bash
+python -m scripts.report_telemetry     # -> docs/index.html, charts from your own telemetry
+```
 
 ## What we found
 
@@ -91,6 +97,7 @@ and never learns the score; and most experiments are single runs.
 | `jev.py`, `server.py` | the TypeSafe proxy, telemetry storage and saved brains |
 | `mk/policy.js`, `scripts/train_local_policy.py` | the distilled local policy, and fitting it |
 | `scripts/probe_channels.mjs` (in `scripts/js/`) | drive one sense, see which motor pools answer |
+| `scripts/report_telemetry.py` | reads every match JSON, writes `docs/index.html` — the charts above |
 
 The physiology, the sensory encodings and the pool→move mapping are assumptions, documented in the
 source. The wiring is not.
