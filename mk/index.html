@@ -1,0 +1,395 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Model Kombat</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🪰</text></svg>">
+    <base href="/mk/">
+    <link rel="preload" href="fonts/metal-mania-latin.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="fonts/teko-latin.woff2" as="font" type="font/woff2" crossorigin>
+    <style>
+        @font-face { font-family: 'Metal Mania'; src: url(fonts/metal-mania-latin.woff2) format('woff2'); font-display: swap; }
+        @font-face { font-family: 'Teko'; src: url(fonts/teko-latin.woff2) format('woff2'); font-weight: 300 700; font-display: swap; }
+
+        :root {
+            --screen: #000;
+            --cabinet: #15110c;
+            --steel: #2a241d;
+            --steel-hi: #4a3f32;
+            --gold: #f2c14e;
+            --bronze: #a8641b;
+            --blood: #b3150f;
+            --life: #22c02a;
+            --bone: #e9dfc9;
+            --dust: #9c8f78;
+            --fly: #45d483;
+            --jev: #ff7b24;
+            --display: 'Metal Mania', 'Impact', serif;
+            --hud: 'Teko', 'Arial Narrow', sans-serif;
+        }
+        * { box-sizing: border-box; }
+        html { background: #000; }
+        body {
+            margin: 0; color: var(--bone); font-family: var(--hud); font-size: 18px; line-height: 1.2;
+            background:
+                radial-gradient(ellipse 60% 40% at 50% 0%, rgba(179, 21, 15, .28), transparent 70%),
+                repeating-linear-gradient(90deg, rgba(255,255,255,.012) 0 2px, transparent 2px 7px),
+                linear-gradient(#0a0806, #000 60%);
+            min-height: 100vh;
+        }
+
+        .cabinet { max-width: 1320px; margin: 0 auto; padding: 18px 16px 40px; }
+
+        /* ---------- marquee ---------- */
+        .marquee {
+            text-align: center; padding: 14px 16px 12px; margin: 0 auto 14px; max-width: 1000px;
+            border-radius: 6px 6px 2px 2px;
+            background: radial-gradient(ellipse at 50% 60%, #4a0d06 0%, #1a0503 55%, #070201 100%);
+            box-shadow: 0 0 0 2px #000, 0 0 0 4px var(--bronze), 0 0 40px rgba(242, 193, 78, .18), inset 0 0 60px rgba(0,0,0,.9);
+        }
+        .marquee h1 {
+            margin: 0; font-family: var(--display); font-weight: 400; letter-spacing: .02em;
+            font-size: clamp(38px, 7.2vw, 88px); line-height: .95;
+            background: linear-gradient(#fff6c8 8%, var(--gold) 38%, var(--bronze) 62%, #5a2a07 92%);
+            -webkit-background-clip: text; background-clip: text; color: transparent;
+            filter: drop-shadow(0 3px 0 #000) drop-shadow(0 0 18px rgba(242, 110, 40, .45));
+        }
+        .marquee p { margin: 4px 0 0; font-size: 1.25rem; letter-spacing: .12em; text-transform: uppercase; color: var(--dust); }
+        .marquee p b { font-weight: 600; }
+        .marquee .fly { color: var(--fly); } .marquee .jev { color: var(--jev); }
+        .marquee { position: relative; }
+        .sound-btn { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); padding: 6px 12px 3px; font-family: var(--hud);
+            font-size: 1.05rem; letter-spacing: .06em; text-transform: uppercase; color: var(--gold); background: #000; cursor: pointer;
+            border: 1px solid var(--bronze); border-radius: 3px; }
+        .sound-btn[aria-pressed="false"] { color: var(--dust); border-color: #3a3128; }
+        .sound-btn:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
+
+        /* ---------- screen ---------- */
+        .bezel {
+            max-width: 1000px; margin: 0 auto; padding: clamp(10px, 2.2vw, 26px);
+            background: linear-gradient(145deg, #231d16, #0c0906 60%);
+            border-radius: 14px;
+            box-shadow: inset 0 2px 0 rgba(255,255,255,.06), inset 0 -3px 12px rgba(0,0,0,.9), 0 20px 60px rgba(0,0,0,.8);
+        }
+        .screen {
+            position: relative; aspect-ratio: 3 / 2; overflow: hidden; background: var(--screen);
+            border-radius: 18px / 14px; box-shadow: 0 0 0 3px #000, inset 0 0 80px rgba(0,0,0,.85);
+            container-type: inline-size;
+        }
+        #arena { position: absolute; inset: 0; background: url(images/arenas/1/arena.png) center / cover; }
+        #arena canvas { display: block; width: 100%; height: 100%; image-rendering: pixelated; }
+        .crt { position: absolute; inset: 0; pointer-events: none;
+            background:
+                repeating-linear-gradient(rgba(0,0,0,.22) 0 1px, transparent 1px 3px),
+                radial-gradient(ellipse at 50% 50%, transparent 58%, rgba(0,0,0,.55) 100%);
+        }
+        .screen.idle { cursor: pointer; }
+        .idle #arena::after { content: ''; position: absolute; inset: 0; background: rgba(0,0,0,.55); }
+
+        /* HUD: life bars, clock, medallions */
+        .hud { position: absolute; top: 4.2cqw; left: 3.4cqw; right: 3.4cqw; display: grid; grid-template-columns: 1fr max(34px, 9cqw) 1fr; align-items: start; gap: 1.6cqw; z-index: 2; }
+        .fighter-bar { min-width: 0; }
+        .bar { position: relative; height: max(14px, 3.3cqw); background: var(--blood); box-shadow: 0 0 0 .3cqw #000, 0 0 0 .55cqw var(--gold), 0 .8cqw 0 .3cqw rgba(0,0,0,.5); }
+        .bar .fill { position: absolute; top: 0; bottom: 0; left: 0; width: 100%; background: linear-gradient(#7dff6e, var(--life) 45%, #0c7a12); transition: width .18s steps(6); }
+        .right .bar .fill { left: auto; right: 0; }
+        .bar-name {
+            position: absolute; inset: 0; display: flex; align-items: center; padding: 0 1cqw; padding-top: .35cqw;
+            font-size: max(12px, 2.9cqw); font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--gold);
+            text-shadow: .2cqw .2cqw 0 #000, -.1cqw -.1cqw 0 #000, .1cqw -.1cqw 0 #000, -.1cqw .1cqw 0 #000;
+        }
+        .right .bar-name { justify-content: flex-end; }
+        .under { display: flex; align-items: center; gap: 1cqw; margin-top: 1.2cqw; font-size: max(10px, 2.1cqw); letter-spacing: .08em; text-transform: uppercase; color: var(--bone); text-shadow: .15cqw .15cqw 0 #000; }
+        .right .under { flex-direction: row-reverse; }
+        .medals { display: flex; gap: .6cqw; }
+        .right .medals { flex-direction: row-reverse; }
+        .medal { width: max(9px, 2.4cqw); height: max(9px, 2.4cqw); border-radius: 50%;
+            background: radial-gradient(circle at 35% 30%, #fff3b0, var(--gold) 35%, var(--bronze) 70%, #4a2305);
+            box-shadow: 0 0 0 .2cqw #000, inset 0 0 0 .35cqw rgba(90, 42, 7, .7); }
+        .clock { text-align: center; font-size: max(24px, 6.6cqw); font-weight: 600; line-height: .8; padding-top: .3cqw; color: var(--gold);
+            text-shadow: .3cqw .3cqw 0 #000, -.15cqw -.15cqw 0 #000, .15cqw -.15cqw 0 #000, -.15cqw .15cqw 0 #000; font-variant-numeric: tabular-nums; }
+        .clock.low { color: #ff5a3c; }
+
+        /* announcer */
+        .announcer { position: absolute; inset: 0; z-index: 3; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none; text-align: center; }
+        #banner {
+            font-family: var(--display); font-size: 12cqw; line-height: 1; padding: 0 4cqw; text-transform: uppercase;
+            background: linear-gradient(#fff6c8 5%, #ffcf4a 35%, #e0521a 65%, #7a0c05 95%);
+            -webkit-background-clip: text; background-clip: text; color: transparent;
+            filter: drop-shadow(.5cqw .6cqw 0 #000) drop-shadow(0 0 2cqw rgba(255, 90, 30, .5));
+        }
+        #banner.small { font-size: max(22px, 5.5cqw); }
+        #bannerSub { margin-top: 1cqw; font-family: var(--display); font-size: 5.2cqw; color: var(--blood); text-transform: uppercase;
+            text-shadow: .3cqw .3cqw 0 #000, 0 0 1.5cqw rgba(0,0,0,.9); }
+        .slam { animation: slam .32s cubic-bezier(.2, 1.6, .4, 1) both; }
+        @keyframes slam { from { transform: scale(2.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+        .blink { animation: blink 1.1s steps(1) infinite; }
+        @keyframes blink { 50% { opacity: 0; } }
+
+        .credits { position: absolute; left: 0; right: 0; bottom: 2.4cqw; z-index: 2; text-align: center; font-size: max(11px, 2.4cqw); letter-spacing: .1em;
+            text-transform: uppercase; color: var(--gold); text-shadow: .2cqw .2cqw 0 #000; }
+
+        /* ---------- control deck ---------- */
+        .stage { display: grid; grid-template-columns: 1fr 1fr; gap: 18px 16px; align-items: start; }
+        .center-col { grid-column: 1 / -1; order: -1; }
+        .panel {
+            position: relative; padding: 14px 16px 16px; border-radius: 4px;
+            background:
+                radial-gradient(ellipse at 20% 0%, rgba(255,255,255,.05), transparent 60%),
+                repeating-linear-gradient(0deg, rgba(0,0,0,.18) 0 1px, transparent 1px 4px),
+                linear-gradient(var(--steel), #1b1712);
+            box-shadow: inset 0 1px 0 rgba(255,255,255,.08), inset 0 0 0 1px #000, 0 0 0 2px var(--steel-hi), 0 10px 30px rgba(0,0,0,.7);
+        }
+        .panel.fly { --me: var(--fly); } .panel.jev { --me: var(--jev); }
+        .panel header { display: grid; grid-template-columns: auto 1fr; gap: 0 12px; align-items: center; margin-bottom: 10px; }
+        .badge { grid-row: span 2; width: 46px; height: 46px; border-radius: 50%; display: grid; place-items: center; padding-top: 4px;
+            font-size: 1.6rem; font-weight: 700; color: #000; background: radial-gradient(circle at 35% 30%, #fff, var(--me) 45%, #000 140%);
+            box-shadow: 0 0 0 3px #000, 0 0 0 5px var(--steel-hi), 0 0 18px var(--me); }
+        .panel h2 { margin: 0; font-family: var(--display); font-weight: 400; font-size: 2rem; line-height: 1; color: var(--me); text-shadow: 2px 2px 0 #000; }
+        .panel .sub { margin: 0; font-size: .95rem; color: var(--dust); line-height: 1.15; }
+        .move { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 6px 12px 2px; margin-bottom: 12px;
+            background: #000; box-shadow: inset 0 0 0 1px #3a3128, inset 0 0 18px rgba(0,0,0,.9); }
+        .move span { color: var(--dust); font-size: 1rem; text-transform: uppercase; letter-spacing: .08em; }
+        .move b { font-size: 2rem; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--me); text-shadow: 0 0 12px var(--me); line-height: 1.1; }
+        .panel h3 { margin: 12px 0 4px; font-size: 1rem; font-weight: 500; color: var(--gold); letter-spacing: .04em; }
+        .row { display: grid; grid-template-columns: 128px 1fr 44px; gap: 10px; align-items: center; font-size: 1rem; line-height: 1; margin: 3px 0; }
+        .row .name { color: var(--dust); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-top: 3px; }
+        .row .val { text-align: right; font-variant-numeric: tabular-nums; padding-top: 3px; }
+        .track { height: 12px; background: #060504; box-shadow: inset 0 0 0 1px #000, 0 0 0 1px #3a3128; padding: 2px; }
+        .track > div { height: 100%; width: 0; transition: width .08s steps(4);
+            background: repeating-linear-gradient(90deg, var(--me) 0 5px, transparent 5px 7px); filter: drop-shadow(0 0 3px var(--me)); }
+        .row.win .name, .row.win .val { color: var(--bone); font-weight: 600; }
+        .brain-pick { display: flex; align-items: center; gap: 10px; margin: auto 0 0; padding-top: 10px; }
+        .brain-pick label { color: var(--dust); font-size: 1rem; white-space: nowrap; padding-top: 2px; }
+        .brain-pick select { flex: 1; min-width: 0; padding: 4px 6px 1px; font-family: var(--hud); font-size: 1.05rem; color: var(--bone);
+            background: #000; border: 1px solid #3a3128; border-radius: 2px; }
+        .brain-pick select:focus-visible { outline: 2px solid var(--gold); outline-offset: 1px; }
+        .brain-pick select:disabled { color: var(--dust); }
+        /* motor rows carry the learned change as a fourth column */
+        .motors .row { grid-template-columns: 118px 1fr 44px 46px; }
+        .motors .learned { text-align: right; font-variant-numeric: tabular-nums; color: var(--dust); padding-top: 3px; }
+        .motors .learned.up { color: var(--fly); } .motors .learned.down { color: #ff7b7b; }
+        .panel h3 i { font-style: normal; color: var(--dust); font-weight: 400; }
+        #jevState { margin: 0; flex: 1; padding: 8px 10px; background: #000; box-shadow: inset 0 0 0 1px #3a3128; color: var(--bone);
+            font: 13px/1.35 ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace; white-space: pre; overflow: hidden; }
+        #raster { display: block; width: 100%; height: 118px; background: #000; image-rendering: pixelated; box-shadow: inset 0 0 0 1px #3a3128; }
+        .hybrid { margin: 0 0 8px; padding: 4px 8px 2px; font-size: .95rem; line-height: 1.25; color: var(--jev);
+            background: #000; box-shadow: inset 0 0 0 1px #3a3128; }
+        .statbar { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 10px; }
+        .statgrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; padding-top: 6px; border-top: 2px solid var(--me); }
+        .statgrid.fly { --me: var(--fly); } .statgrid.jev { --me: var(--jev); }
+        .stat { padding: 4px 6px 3px; background: #000; box-shadow: inset 0 0 0 1px #3a3128; min-width: 0; }
+        .stat b { display: block; font-size: 1.3rem; font-weight: 600; line-height: 1; color: var(--me); font-variant-numeric: tabular-nums;
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .stat span { display: block; margin-top: 2px; font-size: .78rem; letter-spacing: .04em; text-transform: uppercase; color: var(--dust);
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+        .center { display: flex; align-items: center; justify-content: center; gap: 32px; padding-top: 18px; }
+        .match { text-align: center; }
+        .match .score { font-size: 3.4rem; font-weight: 600; line-height: .9; letter-spacing: .04em; text-shadow: 3px 3px 0 #000; font-variant-numeric: tabular-nums; }
+        .match .score .fly { color: var(--fly); } .match .score .jev { color: var(--jev); } .match .score i { color: var(--dust); font-style: normal; }
+        .match p { margin: 2px 0 0; color: var(--dust); font-size: 1rem; }
+        .history { display: flex; gap: 8px; margin: 0; padding: 0; list-style: none; }
+        .history li { min-width: 64px; padding: 5px 8px 3px; text-align: center; background: #000; line-height: 1;
+            box-shadow: inset 0 0 0 1px #3a3128; border-top: 3px solid var(--who, var(--dust)); }
+        .history li.fly { --who: var(--fly); } .history li.jev { --who: var(--jev); }
+        .history b { display: block; font-size: 1.1rem; font-weight: 600; color: var(--who, var(--bone)); text-transform: uppercase; letter-spacing: .04em; }
+        .history span { font-size: .85rem; color: var(--dust); white-space: nowrap; }
+        .history li.next { opacity: .45; }
+        .arcade-btn {
+            width: 118px; height: 118px; border-radius: 50%; border: 0; cursor: pointer; padding-top: 8px;
+            font-family: var(--hud); font-size: 1.9rem; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: #fff4d0;
+            background: radial-gradient(circle at 38% 30%, #ff8a70, #d0180f 45%, #6a0602 100%);
+            box-shadow: 0 0 0 6px #111, 0 0 0 9px var(--steel-hi), 0 9px 0 6px #000, inset 0 -8px 14px rgba(0,0,0,.45), inset 0 6px 10px rgba(255,255,255,.25);
+            text-shadow: 0 2px 0 #5a0602; transition: transform .06s, box-shadow .06s;
+        }
+        .arcade-btn:active { transform: translateY(5px); box-shadow: 0 0 0 6px #111, 0 0 0 9px var(--steel-hi), 0 4px 0 6px #000, inset 0 -4px 10px rgba(0,0,0,.45), inset 0 6px 10px rgba(255,255,255,.2); }
+        .arcade-btn:disabled { cursor: default; filter: saturate(.25) brightness(.6); }
+        .arcade-btn:focus-visible { outline: 3px solid var(--gold); outline-offset: 12px; }
+
+        /* ---------- instruction card ---------- */
+        .howto { max-width: 1000px; margin: 22px auto 0; padding: 14px 20px 12px; background: #000; border: 2px solid var(--bronze);
+            box-shadow: inset 0 0 0 4px #000, inset 0 0 0 5px #3a2410; color: var(--dust); font-size: 1.15rem; line-height: 1.3; }
+        .howto h2 { margin: 0 0 6px; font-family: var(--display); font-weight: 400; font-size: 1.6rem; color: var(--gold); }
+        .howto p { margin: 0 0 8px; max-width: 78ch; }
+        .howto b { color: var(--bone); font-weight: 600; }
+        .howto a { color: var(--gold); }
+        .howto code { font-family: inherit; color: var(--bone); }
+
+        @media (max-width: 680px) {
+            .stage { grid-template-columns: 1fr; }
+            .sound-btn { position: static; transform: none; margin-top: 8px; }
+            .row { grid-template-columns: 104px 1fr 40px; }
+            .arcade-btn { width: 92px; height: 92px; font-size: 1.5rem; }
+            .center { flex-wrap: wrap; gap: 16px 24px; }
+        }
+        /* ---------- 16:9 stage: everything in one frame, sized from the viewport ---------- */
+        @media (min-width: 1100px) and (min-aspect-ratio: 4/3) {
+            .cabinet { max-width: none; padding: 1.4vh 1.4vw 0; }
+            .marquee { height: 9vh; max-width: none; margin: 0 0 1.4vh; padding: 0 2vw;
+                display: flex; align-items: center; justify-content: center; gap: 2.2vw; }
+            .marquee h1 { font-size: 6.6vh; }
+            .marquee p { margin: 0; font-size: 2.5vh; padding-top: .6vh; }
+            .sound-btn { right: 1.4vw; font-size: 1.9vh; padding: .5vh .8vw .2vh; }
+
+            .stage {
+                /* screen height = 100vh - pads 2.8 - marquee 9 - gap 1.4 - bezel 3.2 - stats 7.5 - strip gap 2 - strip 8.5 */
+                --screen-w: min(calc(65.6vh * 1.5), 53vw);
+                height: calc(100vh - 13.2vh); grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 0 1.2vw; align-items: stretch;
+            }
+            .center-col { grid-column: auto; order: 0; display: flex; flex-direction: column; min-height: 0; }
+            .bezel { max-width: none; width: calc(var(--screen-w) + 3.2vh); padding: 1.6vh; border-radius: 1.4vh; }
+            .screen { width: var(--screen-w); }
+            .center { flex: 1; min-height: 8.5vh; margin-top: 1.2vh; padding: 0; gap: 2.4vw; }
+            .arcade-btn { width: 7.4vh; height: 7.4vh; padding-top: .6vh; font-size: 2.3vh;
+                box-shadow: 0 0 0 .5vh #111, 0 0 0 .8vh var(--steel-hi), 0 .7vh 0 .5vh #000, inset 0 -.7vh 1.2vh rgba(0,0,0,.45), inset 0 .5vh .9vh rgba(255,255,255,.25); }
+            .arcade-btn:active { box-shadow: 0 0 0 .5vh #111, 0 0 0 .8vh var(--steel-hi), 0 .3vh 0 .5vh #000; }
+            .match { display: flex; align-items: baseline; gap: 1.6vw; }
+            .match .score { font-size: 6vh; }
+            .match p { font-size: 2vh; }
+            .history { gap: .5vw; }
+            .history li { min-width: 6.4vh; padding: .6vh .5vw .4vh; border-top-width: .35vh; }
+            .history b { font-size: 2.1vh; }
+            .history span { font-size: 1.55vh; }
+
+            .panel { display: flex; flex-direction: column; overflow: hidden; padding: 1.4vh 1vw 1.6vh; }
+            .panel header { gap: 0 .8vw; margin-bottom: 1vh; }
+            .badge { width: 4.8vh; height: 4.8vh; font-size: 2.4vh; padding-top: .4vh; }
+            .panel h2 { font-size: 3.4vh; }
+            .panel .sub { font-size: 1.55vh; }
+            .move { padding: .5vh .8vw .2vh; margin-bottom: .8vh; }
+            .move span { font-size: 1.6vh; }
+            .move b { font-size: 3vh; white-space: nowrap; }
+            .panel h3 { margin: 1vh 0 .3vh; font-size: 1.8vh; }
+            .row { grid-template-columns: minmax(0, 7.2em) 1fr 2.6em; gap: .6vw; font-size: 1.75vh; margin: .22vh 0; }
+            .motors .row { grid-template-columns: minmax(0, 7.2em) 1fr 2.6em 2.8em; }
+            .track { height: 1.3vh; padding: .2vh; }
+            #raster { flex: 1 1 8vh; height: auto; min-height: 3vh; }
+
+            #jevState { font-size: 1.45vh; padding: .8vh .7vw; }
+            .brain-pick { gap: .6vw; margin: auto 0 0; padding-top: 1vh; }
+            .hybrid { font-size: 1.55vh; margin-bottom: .8vh; padding: .5vh .5vw .2vh; }
+            .brain-pick label, .brain-pick select { font-size: 1.7vh; }
+            .brain-pick select { padding: .4vh .4vw .1vh; }
+            .statbar { gap: .8vw; margin-top: .8vh; }
+            .statgrid { gap: .35vh .3vw; padding-top: .5vh; }
+            .stat { padding: .5vh .4vw .3vh; }
+            .stat b { font-size: 2.1vh; }
+            .stat span { font-size: 1.35vh; margin-top: .2vh; }
+            .howto { margin-top: 3vh; }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .slam, .blink { animation: none; }
+            .bar .fill, .track > div { transition: none; }
+        }
+    </style>
+</head>
+<body>
+<main class="cabinet">
+    <header class="marquee">
+        <h1>Model Kombat</h1>
+        <button id="soundBtn" class="sound-btn" type="button" aria-pressed="true" title="Toggle music and sound (M)">Sound on</button>
+        <p><b class="fly">Fly brain</b> vs <b class="jev">Jev</b></p>
+    </header>
+
+    <div class="stage">
+        <section class="panel fly">
+            <header>
+                <div class="badge">1P</div>
+                <h2>Fly brain</h2>
+                <p class="sub" id="flySub">Spiking network on real male <i>Drosophila</i> wiring</p>
+            </header>
+            <div class="move"><span>Move</span><b id="flyAction">—</b></div>
+            <h3>What it senses (Hz into each cell type)</h3>
+            <div id="flySensors"></div>
+            <h3>Motor pools: z above rest <i id="flyLearnHead">· learned</i></h3>
+            <div id="flyMotors" class="motors"></div>
+            <h3>Spikes, senses to muscles</h3>
+            <canvas id="raster" width="300" height="120"></canvas>
+            <div class="brain-pick">
+                <label for="brainSelect">Starting brain</label>
+                <select id="brainSelect"><option value="wired">Wired: the connectome as mapped</option></select>
+            </div>
+        </section>
+
+        <div class="center-col">
+            <div class="bezel">
+                <div class="screen idle" id="screen">
+                    <div id="arena"></div>
+                    <div class="hud">
+                        <div class="fighter-bar left">
+                            <div class="bar"><div class="fill" id="leftLife"></div><span class="bar-name" id="leftName">Fly brain</span></div>
+                            <div class="under"><span id="leftChar">Sub-Zero</span><span class="medals" id="leftWins"></span></div>
+                        </div>
+                        <div class="clock" id="timer">60</div>
+                        <div class="fighter-bar right">
+                            <div class="bar"><div class="fill" id="rightLife"></div><span class="bar-name" id="rightName">Jev</span></div>
+                            <div class="under"><span id="rightChar">Kano</span><span class="medals" id="rightWins"></span></div>
+                        </div>
+                    </div>
+                    <div class="announcer" aria-live="polite"><div id="banner"></div><div id="bannerSub"></div></div>
+                    <div class="crt"></div>
+                    <div class="credits" id="status">Loading the maleCNS circuit</div>
+                </div>
+            </div>
+
+            <div class="statbar">
+                <div class="statgrid fly">
+                    <div class="stat" title="Decisions per second the fly brain actually completed"><b id="flyRate">–</b><span>Moves/s</span></div>
+                    <div class="stat" title="Hits landed this match"><b id="flyHits">0</b><span>Hits</span></div>
+                    <div class="stat" title="Damage dealt this match"><b id="flyDmg">0</b><span>Damage</span></div>
+                    <div class="stat" title="Own hits the opponent guarded (2 damage instead of 8-10)"><b id="flyBlocked">0</b><span>Blocked</span></div>
+                    <div class="stat" title="Sense to move: the fly acts on what it sensed this long ago"><b id="flyReact">–</b><span>Reaction</span></div>
+                    <div class="stat" title="How clearly the winning motor pool beat the runner-up (0-1)"><b id="flyConf">–</b><span>Confidence</span></div>
+                    <div class="stat" title="Decisions dropped because a newer one had already been applied"><b id="flyStale">0</b><span>Stale</span></div>
+                    <div class="stat" title="Dopamine this match: reward from landing or blocking, punishment from taking hits"><b id="flyDopa">–</b><span>Dopamine</span></div>
+                </div>
+                <div class="statgrid jev">
+                    <div class="stat" title="Decisions per second Jev actually completed"><b id="jevRate">–</b><span>Moves/s</span></div>
+                    <div class="stat" title="Hits landed this match"><b id="jevHits">0</b><span>Hits</span></div>
+                    <div class="stat" title="Damage dealt this match"><b id="jevDmg">0</b><span>Damage</span></div>
+                    <div class="stat" title="Own hits the opponent guarded (2 damage instead of 8-10)"><b id="jevBlocked">0</b><span>Blocked</span></div>
+                    <div class="stat" title="Median round trip to the TypeSafe API"><b id="jevLat">–</b><span>Latency</span></div>
+                    <div class="stat" title="Jev's own confidence in the move it picked (0-1)"><b id="jevConf">–</b><span>Confidence</span></div>
+                    <div class="stat" title="Answers discarded because a newer one had already been applied"><b id="jevStale">0</b><span>Stale</span></div>
+                    <div class="stat" title="Failed API calls (the fight continues; Jev holds its last move)"><b id="jevErr">0</b><span>Errors</span></div>
+                </div>
+            </div>
+
+            <div class="center">
+                <button id="startBtn" class="arcade-btn" disabled>Start</button>
+                <div class="match">
+                    <div class="score"><span class="fly" id="scoreFly">0</span><i>–</i><span class="jev" id="scoreJev">0</span></div>
+                    <p id="roundInfo">Best of 5</p>
+                </div>
+                <ol class="history" id="history" aria-label="Round results"></ol>
+            </div>
+
+        </div>
+        <section class="panel jev">
+            <header>
+                <div class="badge">2P</div>
+                <h2>Jev</h2>
+                <p class="sub" id="jevSub">TypeSafe System One, reading the fight as JSON</p>
+            </header>
+            <div class="move"><span>Move</span><b id="jevAction">—</b></div>
+            <p class="hybrid" id="jevHybrid" hidden>Local policy ready</p>
+            <h3>Odds for each move</h3>
+            <div id="jevProbs"></div>
+            <h3>What it reads (JSON sent for this move)</h3>
+            <pre id="jevState">waiting for the first round</pre>
+        </section>
+    </div>
+
+    <section class="howto">
+        <h2>How to play</h2>
+        <p><b>Fly brain</b> is a 12,000-neuron slice of the Janelia FlyEM <a href="https://male-cns.janelia.org/">maleCNS v1.0</a> connectome, simulated spike by spike in a background thread. The fight drives real cell types: the opponent moving reaches LC9, its size reaches LC10a, lunges and strikes reach the looming detectors LPLC2 and LC4, closeness arouses male-specific P1, foreleg contact reaches the taste bristles, and hits reach the body's touch bristles. The busiest motor pool picks the move: DNp09 walks forward, MDN walks back, the giant-fiber jump neuron TTMn jumps away, front legs punch, hind legs kick, and the wing muscles raise a guard. Two reflexes come straight from the wiring: movement pulls the fly forward (LC9 to DNp09), and a looming strike launches the escape jump. Nothing we sense reliably reaches MDN, so the fly retreats by jumping, not by walking back. During a match the fly learns: dopamine signals how much better or worse an exchange went than expected: landing a hit or blocking a strike is better, eating a full-damage strike is worse. That strengthens or weakens the recently active synapses into the motor pool whose move it actually made, so reflexes that keep getting it punched fade and ones that pay off grow. Flies do this kind of learning mainly in the mushroom body; putting it on the motor inputs is our simplification. The wiring is real. The neuron physics, the senses, the move mapping and the learning rule are assumptions. Every match is saved. What the fly learned during a match is kept with it, and the Starting brain menu can start a new match from the wired connectome or from the best brain learned so far.</p>
+        <p><b>Jev</b> (<a href="https://docs.typesafe.ai/">TypeSafe</a> <code>jev-latest</code>) gets life, moves, distance and time left as JSON about ten times a second and picks one of the same seven moves. Fly brain always fights as Sub-Zero on the left and Jev as Kano on the right. A round ends on a knockout or when the clock runs out. Game engine: <a href="https://github.com/mgechev/mk.js">mk.js</a> by Minko Gechev (MIT). Music, blocks, whooshes, the bell and the KO boom are synthesized in your browser; punches, kicks and reactions are recorded sounds from <a href="https://pixabay.com/">Pixabay</a> (<a href="effects/CREDITS.md">credits</a>); the announcer was voiced once with ElevenLabs. Press M to mute.</p>
+    </section>
+</main>
+
+<script src="vendor/mk.js"></script>
+<script type="module" src="fight.js"></script>
+</body>
+</html>
