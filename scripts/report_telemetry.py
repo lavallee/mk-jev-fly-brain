@@ -99,14 +99,18 @@ def per_second(rounds: list[dict], pick) -> float:
     return mean(pick(r) / max(0.1, r["seconds"]) for r in rounds)
 
 
-def generation_series(matches: list[dict], circuit: str, value) -> dict[str, dict[int, float]]:
-    """{opponent: {generation: mean value}} for one circuit."""
+def generation_series(matches: list[dict], circuit: str, value, variant: str | None = None) -> dict[str, dict[int, float]]:
+    """{opponent: {generation: mean value}} for one circuit, and one fly variant if named.
+
+    Arms that differ in their learning setup are different competitors, so averaging them into one
+    curve would hide the thing the curve is for.
+    """
     buckets: dict[str, dict[int, list[float]]] = defaultdict(lambda: defaultdict(list))
     for m in matches:
         cfg = m.get("config") or {}
         gen = cfg.get("generation")
         this_circuit = "rewired" if cfg.get("circuit") == "rewired" else "real"
-        if not gen or this_circuit != circuit:
+        if not gen or this_circuit != circuit or (variant and fly_variant(cfg) != variant):
             continue
         v = value(m)
         if v is not None:
@@ -311,16 +315,17 @@ def build(matches: list[dict]) -> str:
 
     # damage per landed hit, real vs rewired, as the headline pair
     def dmg_per_hit(circuit: str) -> float:
+        want = "Rewired control" if circuit == "rewired" else "Curriculum + thresholds"
         rs = [r for m in matches for r in m["rounds"]
-              if (("rewired" if (m.get("config") or {}).get("circuit") == "rewired" else "real") == circuit)
-              and (m.get("config") or {}).get("jev_mode") == "rules"]
+              if (m.get("config") or {}).get("jev_mode") == "rules" and fly_variant(m.get("config") or {}) == want]
         hits = sum(r["hits"]["fly"] for r in rs)
         return sum(r["damage"]["fly"] for r in rs) / max(1, hits)
 
     real_dph, rewired_dph = dmg_per_hit("real"), dmg_per_hit("rewired")
 
     # 1. learning curves by opponent (real circuit)
-    curves = generation_series(matches, "real", lambda m: per_second(m["rounds"], lambda r: r["damage"]["fly"]))
+    dps = lambda m: per_second(m["rounds"], lambda r: r["damage"]["fly"])
+    curves = generation_series(matches, "real", dps, variant="Curriculum")
     series1, rows1 = [], []
     for key, (label, slot) in OPPONENTS.items():
         pts = sorted(curves.get(key, {}).items())
@@ -331,10 +336,11 @@ def build(matches: list[dict]) -> str:
     gens = sorted({g for s in series1 for g, _ in s["points"]})
 
     # 2. the rewired control, against the same opponent
-    rew = generation_series(matches, "rewired", lambda m: per_second(m["rounds"], lambda r: r["damage"]["fly"]))
+    real_th = generation_series(matches, "real", dps, variant="Curriculum + thresholds")
+    rew = generation_series(matches, "rewired", dps, variant="Rewired control")
     series2 = []
-    if "rules" in curves:
-        series2.append({"name": "Real connectome", "slot": 1, "points": sorted(curves["rules"].items())})
+    if "rules" in real_th:
+        series2.append({"name": "Real connectome", "slot": 1, "points": sorted(real_th["rules"].items())})
     if "rules" in rew:
         series2.append({"name": "Rewired control", "slot": 2, "points": sorted(rew["rules"].items())})
 
@@ -343,7 +349,7 @@ def build(matches: list[dict]) -> str:
     for m in matches:
         cfg = m.get("config") or {}
         gen, strength = cfg.get("generation"), ((m.get("learned") or {}).get("strength") or {})
-        if gen and strength and cfg.get("jev_mode") == "rules" and cfg.get("circuit") != "rewired":
+        if gen and strength and cfg.get("jev_mode") == "rules" and fly_variant(cfg) == "Curriculum + thresholds":
             for pool in POOLS:
                 if pool in strength:
                     pool_pts[pool][gen].append(strength[pool])
@@ -386,10 +392,10 @@ def build(matches: list[dict]) -> str:
                standings_table(cells),
                legend([("Won", "var(--pole-cool)"), ("Drawn", "var(--neutral)"), ("Lost", "var(--pole-warm)")]), ""),
         figure("Who actually played whom",
-               "Every match-up in the telemetry, as rounds won–drawn–lost by the fly. Blank cells were never "
-               "played: each fly was built to answer whichever opponent had just beaten its predecessor, so the "
-               "grid fills as a staircase rather than a round robin. The wired brain is the only one that faced "
-               "the whole field, and it lost to all of it.",
+               "Every competitor against every other, as rounds won–drawn–lost by the fly. Read down a column "
+               "to see what the fly's learning setup is worth against a fixed opponent; read across a row to see "
+               "how far that setup carries. The wiring alone loses to the whole field; a brain carried in from an "
+               "earlier curriculum is the only fly with a winning record against all four.",
                head_to_head(cells),
                legend([("Fly ahead", "var(--pole-cool)"), ("Level", "var(--neutral)"), ("Fly behind", "var(--pole-warm)")]),
                table(["Fly brain", "Opponent", "Matches", "Won", "Drawn", "Lost"],
@@ -448,8 +454,8 @@ def build(matches: list[dict]) -> str:
         generated=time.strftime("%d %B %Y"),
         stats=(stat(f"{len(matches):,}", "matches") + stat(f"{len(rounds_all):,}", "rounds")
                + stat(f"{jev_log + fly_log:,}", "logged decisions")
-               + stat(f"{real_dph:.1f}", "damage per hit", "real wiring, vs rule bot")
-               + stat(f"{rewired_dph:.1f}", "damage per hit", "rewired control, same opponent")),
+               + stat(f"{real_dph:.1f}", "damage per hit", "real wiring, curriculum vs rule bot")
+               + stat(f"{rewired_dph:.1f}", "damage per hit", "rewired control, same curriculum")),
         figures="\n".join(figures))
 
 

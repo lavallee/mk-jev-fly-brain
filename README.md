@@ -60,8 +60,11 @@ and the *Starting brain* menu can begin a later match from any of them. Once you
 your own:
 
 ```bash
+python -m scripts.run_matches "jev=rules&learn=1&plastic=500&baseline=0.02"   # play, headless
 python -m scripts.report_telemetry     # -> docs/index.html, charts from your own telemetry
 ```
+
+Rounds run in real time either way, so an eight-generation curriculum is about twenty minutes.
 
 ## What we found
 
@@ -101,6 +104,7 @@ and never learns the score; and most experiments are single runs.
 | `mk/policy.js`, `scripts/train_local_policy.py` | the distilled local policy, and fitting it |
 | `scripts/probe_channels.mjs` (in `scripts/js/`) | drive one sense, see which motor pools answer |
 | `scripts/report_telemetry.py` | reads every match JSON, writes `docs/index.html` — the charts above |
+| `scripts/run_matches.py` | plays match-ups headlessly, so a whole arm can run without sitting at the arcade |
 
 The physiology, the sensory encodings and the pool→move mapping are assumptions, documented in the
 source. The wiring is not.
